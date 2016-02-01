@@ -13,7 +13,7 @@ PlatformerGame.Game.prototype = {
 //        this.music.play();
 
         this.timer = 0;
-        this.speed = 5;
+        this.speed = 10;
 
         this.speedStep = 1;
 
@@ -22,7 +22,7 @@ PlatformerGame.Game.prototype = {
         this.minusKey = this.game.input.keyboard.addKey(Phaser.Keyboard.Z);
         this.minusKey.onDown.add(this.decSpeed, this);
         this.rKey = this.game.input.keyboard.addKey(Phaser.Keyboard.R);
-        this.rKey.onDown.add(this.restart, this);
+        
         this.enterKey = this.game.input.keyboard.addKey(Phaser.Keyboard.ENTER);
         this.enterKey.onDown.add(this.pressEnter, this);
 
@@ -34,19 +34,7 @@ PlatformerGame.Game.prototype = {
         this.grid = {};
         this.nextGrid = {};
 
-        this.allTimeMinimumX = -1;
-        this.allTimeMaximumX = -1;
-
-        this.allTimeMinimumY = -1;
-        this.allTimeMaximumY = -1;
-
-        this.minimumX = -1;
-        this.maximumX = -1;
-        this.minimumY = -1;
-        this.maximumY = -1;
-
-
-        this.generateRandomGrid();
+        this.generateGrid();
 
         this.scoreText = this.game.add.text(16, 16, 'Speed: ' + this.speed, { fontSize: '32px', fill: '#000' });
         this.scoreText.fixedToCamera = true;
@@ -85,23 +73,6 @@ PlatformerGame.Game.prototype = {
             var randY = 20 + parseInt(this.game.rnd.integerInRange(5, 15));
             //var randY = this.game.rnd.integerInRange(5, 15);
 
-            if (this.minimumX == -1 || randX <= this.minimumX) {
-                this.minimumX = parseInt(randX) - 1;
-                this.allTimeMinimumX = this.minimumX;
-            }
-            if (this.maximumX == -1 || randX >= this.maximumX) {
-                this.maximumX = parseInt(randX) + 1;
-                this.allTimeMaximumX = this.maximumX;
-            }
-            if (this.minimumY == -1 || randY <= this.minimumY) {
-                this.minimumY = parseInt(randY) - 1;
-                this.allTimeMinimumY = this.minimumY;
-            }
-            if (this.maximumY == -1 || randY >= this.maximumY) {
-                this.maximumY = parseInt(randY) + 1;
-                this.allTimeMaximumY = this.maximumY;
-            }
-
             if (randX in this.grid) {
                 this.grid[randX][randY] = true;
             }
@@ -116,25 +87,39 @@ PlatformerGame.Game.prototype = {
 
     restart: function() {
         this.game.paused = true;
-
+/*
         for (var x = this.allTimeMinimumX; x <= this.allTimeMaximumX; x++) {
             for (var y = this.allTimeMinimumY; y <= this.allTimeMaximumY; y++) {
                 this.graphics.beginFill(this.backgroundCol, 1);
                 this.graphics.drawRect(x*10 + 1, y*10 + 1, 8, 8);
             }
         }
-
+*/
+        this.graphics.kill();
+        this.graphics = this.game.add.graphics(0, 0);
         delete this.grid;
         delete this.nextGrid;
         this.grid = {};
         this.nextGrid = {};
-        this.minimumX = -1;
-        this.maximumX = -1;
-        this.minimumY = -1;
-        this.maximumY = -1;
 
         this.generateRandomGrid();
         this.game.paused = false;
+    },
+
+    checkDeadCell: function(cell_x, cell_y) {
+        var i = this.countNeighbours(cell_x, cell_y);
+                        
+        if (i == 3) {
+            if (cell_x in this.nextGrid) {
+                this.nextGrid[cell_x][cell_y] = true;
+            }
+            else {
+                this.nextGrid[cell_x] = {};
+                this.nextGrid[cell_x][cell_y] = true;
+            }
+            this.graphics.beginFill(this.foregroundCol, 1);
+            this.graphics.drawRect(cell_x*10 + 1, cell_y*10 + 1, 8, 8);
+        }
     },
 
     update: function() {
@@ -148,29 +133,21 @@ Any dead cell with exactly three live neighbours becomes a live cell, as if by r
 */
         if ((this.manualSteps && this.enterPressed) || (!this.manualSteps && this.timer % this.speed == 0)) {
 
-            this.minimumX = -1;
-            this.maximumX = -1;
-            this.minimumY = -1;
-            this.maximumY = -1;
-
             for (var x in this.grid) {
                 for (var y in this.grid[x]) {
                     var i = this.countNeighbours(x, y);
                     if (i < 2 || i > 3) {
-                        if (x in this.grid && y in this.grid[x]) {
-
-                            if (x in this.nextGrid && y in this.nextGrid[x]) {
-                                if (Object.keys(this.nextGrid[x]).length == 1) {
-                                    delete this.nextGrid[x];
-                                }
-                                else {
-                                    delete this.nextGrid[x][y];
-                                }
+                        if (x in this.nextGrid && y in this.nextGrid[x]) {
+                            if (Object.keys(this.nextGrid[x]).length == 1) {
+                                delete this.nextGrid[x];
                             }
-                            
-                            this.graphics.beginFill(this.backgroundCol, 1);
-                            this.graphics.drawRect(x*10 + 1, y*10 + 1, 8, 8);
+                            else {
+                                delete this.nextGrid[x][y];
+                            }
                         }
+                        
+                        this.graphics.beginFill(this.backgroundCol, 1);
+                        this.graphics.drawRect(x*10 + 1, y*10 + 1, 8, 8);
                     }
                     else {
                         if (x in this.nextGrid) {
@@ -181,24 +158,62 @@ Any dead cell with exactly three live neighbours becomes a live cell, as if by r
                             this.nextGrid[x][y] = true;
                         }
 
-                        if (this.minimumX == -1 || x <= this.minimumX) {
-                            this.minimumX = parseInt(x) - 1;
+                    }
+                    if (!(parseInt(y)-1 in this.grid[x])) {
+                        this.checkDeadCell(x, parseInt(y)-1);
+                    }
+                    if (!(parseInt(y)+1 in this.grid[x])) {
+                        this.checkDeadCell(x, parseInt(y)+1);
+                    }
+
+                    if (parseInt(x)-1 in this.grid) {
+                        if (!(y in this.grid[parseInt(x)-1])) {
+                            this.checkDeadCell(parseInt(x)-1, y);
                         }
-                        if (this.maximumX == -1 || x >= this.maximumX) {
-                            this.maximumX = parseInt(x) + 1;
+                        if (!(parseInt(y)-1 in this.grid[parseInt(x)-1])) {
+                            this.checkDeadCell(parseInt(x)-1, parseInt(y)-1);
                         }
-                        if (this.minimumY == -1 || y <= this.minimumY) {
-                            this.minimumY = parseInt(y) - 1;
-                        }
-                        if (this.maximumY == -1 || y >= this.maximumY) {
-                            this.maximumY = parseInt(y) + 1;
+                        if (!(parseInt(y)+1 in this.grid[parseInt(x)-1])) {
+                            this.checkDeadCell(parseInt(x)-1, parseInt(y)+1);
                         }
                     }
-                    // could check dead neightbour cells here, but that means doing double work a lot
+                    else {
+                        this.checkDeadCell(parseInt(x)-1, parseInt(y));
+                        this.checkDeadCell(parseInt(x)-1, parseInt(y)-1);
+                        this.checkDeadCell(parseInt(x)-1, parseInt(y)+1);
+                    }
+
+                    if (parseInt(x)+1 in this.grid) {
+                        if (!(y in this.grid[parseInt(x)+1])) {
+                            this.checkDeadCell(parseInt(x)+1, parseInt(y));
+                        }
+                        if (!(parseInt(y)-1 in this.grid[parseInt(x)+1])) {
+                            this.checkDeadCell(parseInt(x)+1, parseInt(y)-1);
+                        }
+                        if (!(parseInt(y)+1 in this.grid[parseInt(x)+1])) {
+                            this.checkDeadCell(parseInt(x)+1, parseInt(y)+1);
+                        }
+                    }
+                    else {
+                        // none in the above three, check them
+                        this.checkDeadCell(parseInt(x)+1, parseInt(y));
+                        this.checkDeadCell(parseInt(x)+1, parseInt(y)-1);
+                        this.checkDeadCell(parseInt(x)+1, parseInt(y)+1);
+                    }
 
                 }
             }
 
+
+
+/*
+
+
+412    x
+4x2   xxx
+432    x
+xxxxx
+  x
 
             for (var x = this.minimumX; x <= this.maximumX; x++) {
                 for (var y = this.minimumY; y <= this.maximumY; y++) {
@@ -233,23 +248,11 @@ Any dead cell with exactly three live neighbours becomes a live cell, as if by r
                     }
                 }
             }
-            if (this.minimumX < this.allTimeMinimumX) {
-                this.allTimeMinimumX = this.minimumX;
-            }
-            if (this.maximumX > this.allTimeMaximumX) {
-                this.allTimeMaximumX = this.maximumX;
-            } 
-            if (this.minimumY < this.allTimeMinimumY) {
-                this.allTimeMinimumY = this.minimumY;
-            }
-            if (this.maximumY > this.allTimeMaximumY) {
-                this.allTimeMaximumY = this.maximumY;
-            }
-
-            delete this.grid;
+            */
+            //delete this.grid;
             this.grid = {};
             for (var x2 in this.nextGrid) {
-                for (var y2 in this.nextGrid[x2]) {
+                for (var y2 in this.nextGrid[String(x2)]) {
                     if (x2 in this.grid) {
                         this.grid[x2][y2] = true;
 
@@ -260,7 +263,9 @@ Any dead cell with exactly three live neighbours becomes a live cell, as if by r
                     }
                 }
             }
-
+            if (this.rKey.isDown) {
+                this.restart()
+            }
             this.enterPressed = false;
         }
     },
